@@ -1,6 +1,8 @@
-from flask import Flask, request, render_template_string, send_from_directory
+from flask import Flask, request, render_template_string, send_file
 import os
+import sqlite3
 from pytube import YouTube
+from io import BytesIO
 
 
 index_html = """
@@ -22,12 +24,29 @@ index_html = """
 </html>
 
 """
+
+
+# from flask import Flask
+
+# app = Flask(__name__)
+
+# @app.route('/')
+# def home():
+#     return 'Hello, World!'
+
+# @app.route('/about')
+# def about():
+#     return 'About'
+
+
+
 app = Flask(__name__)
 
-# Directory where the downloaded audio will be stored
-DOWNLOAD_FOLDER = 'downloads'
-if not os.path.exists(DOWNLOAD_FOLDER):
-    os.makedirs(DOWNLOAD_FOLDER)
+# Create an in-memory SQLite database
+conn = sqlite3.connect(':memory:', check_same_thread=False)
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS audios
+             (id INTEGER PRIMARY KEY, audio BLOB)''')
 
 def download_audio(url):
     # Create a YouTube object
@@ -48,7 +67,8 @@ def download_audio(url):
 
     # Download the highest quality audio stream
     audio_stream = yt.streams.get_by_itag(itag)
-    audio_stream.download(output_path=DOWNLOAD_FOLDER, filename='highest_quality_audio.mp3')
+    audio_bytes = audio_stream.stream_to_buffer()
+    return audio_bytes
 
 @app.route('/')
 def index():
@@ -57,20 +77,17 @@ def index():
 @app.route('/download', methods=['POST'])
 def download():
     url = request.form['url']
-    download_audio(url)
-    return send_from_directory(DOWNLOAD_FOLDER, 'highest_quality_audio.mp3', as_attachment=True)
+    audio_bytes = download_audio(url)
+
+    # Save the audio in the database
+    c.execute("INSERT INTO audios (audio) VALUES (?)", (audio_bytes,))
+    conn.commit()
+
+    # Retrieve the audio from the database
+    c.execute("SELECT audio FROM audios ORDER BY id DESC LIMIT 1")
+    audio_data = c.fetchone()[0]
+
+    return send_file(BytesIO(audio_data), mimetype='audio/mp3', as_attachment=True, attachment_filename='highest_quality_audio.mp3')
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-# from flask import Flask
-
-# app = Flask(__name__)
-
-# @app.route('/')
-# def home():
-#     return 'Hello, World!'
-
-# @app.route('/about')
-# def about():
-#     return 'About'
