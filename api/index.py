@@ -90,4 +90,4 @@ def download():
     return send_file(BytesIO(audio_data), mimetype='audio/mp3', as_attachment=True, attachment_filename='highest_quality_audio.mp3')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
